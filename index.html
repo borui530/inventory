@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>車庫門五金雲端同步庫存系統</title>
+    
+    <!-- Firebase SDK (相容瀏覽器直接載入版) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-light: #eff6ff;
+            --danger: #dc2626;
+            --warning: #d97706;
+            --success: #16a34a;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --border: #cbd5e1;
+            --text: #0f172a;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 12px;
+            padding-bottom: 90px;
+        }
+        h1 { font-size: 1.2rem; margin: 4px 0 6px 0; text-align: center; color: #1e293b; }
+        
+        /* 雲端連線狀態指示燈 */
+        .sync-status {
+            text-align: center;
+            font-size: 0.75rem;
+            margin-bottom: 12px;
+            color: #64748b;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #94a3b8;
+            margin-right: 4px;
+        }
+        .status-online { background: var(--success); }
+        .status-offline { background: var(--danger); }
+
+        .mode-switch {
+            display: flex;
+            background: #e2e8f0;
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 14px;
+        }
+        .mode-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            background: transparent;
+            color: #475569;
+            cursor: pointer;
+            text-align: center;
+        }
+        .mode-btn.active-out { background: var(--primary); color: #fff; }
+        .mode-btn.active-in { background: var(--success); color: #fff; }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 14px;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+        label { 
+            display: block; 
+            font-size: 0.85rem; 
+            font-weight: 600; 
+            margin-bottom: 4px; 
+            color: #475569; 
+        }
+        input, select {
+            width: 100%;
+            height: 44px;
+            padding: 0 12px;
+            font-size: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            outline: none;
+            background: #fff;
+            color: var(--text);
+        }
+        input:focus, select:focus { border-color: var(--primary); }
+
+        .calc-helper {
+            background: #f1f5f9;
+            border: 1px dashed #94a3b8;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .calc-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .calc-info-tag {
+            background: #e2e8f0;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            color: #334155;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+        .calc-info-tag strong { color: var(--primary); }
+
+        .btn-auto {
+            background: #0284c7;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            width: 100%;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .btn-submit {
+            width: 100%;
+            height: 48px;
+            font-size: 1.05rem;
+            font-weight: 700;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            color: #fff;
+            background: var(--primary);
+            margin-top: 10px;
+        }
+        .btn-in-submit {
+            background: var(--success);
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            padding: 4px 8px;
+            font-size: 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin-bottom: 8px;
+        }
+        .cart-item-info { flex: 1; margin-right: 6px; }
+        .cart-item-name { font-size: 0.9rem; font-weight: bold; }
+        .cart-item-stock { font-size: 0.75rem; color: #64748b; }
+        
+        .cart-right-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .suggest-badge {
+            background: #e0f2fe;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+            border-radius: 6px;
+            padding: 3px 6px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            white-space: nowrap;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .suggest-badge span { font-size: 0.65rem; color: #0284c7; }
+        
+        .cart-stepper {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .cart-btn-step {
+            width: 30px;
+            height: 32px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: 1px solid var(--border);
+            background: #f1f5f9;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .cart-input-qty {
+            width: 46px;
+            height: 32px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1rem;
+            padding: 0;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+        .cart-del-btn {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 1.1rem;
+            cursor: pointer;
+            padding: 0 0 0 4px;
+        }
+
+        .alert-box {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 14px;
+            display: none;
+        }
+        .alert-title { color: var(--danger); font-weight: bold; font-size: 0.95rem; margin-bottom: 6px; }
+        .alert-item { font-size: 0.85rem; color: #991b1b; padding: 2px 0; }
+
+        .category-header {
+            background: #e2e8f0;
+            padding: 6px 10px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            border-radius: 6px;
+            margin: 10px 0 6px 0;
+            color: #334155;
+        }
+        .stock-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 4px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .stock-name { font-size: 0.9rem; font-weight: 600; }
+        .stock-note { font-size: 0.75rem; color: #64748b; }
+        .stock-right { display: flex; align-items: center; gap: 6px; }
+        .stock-qty { font-size: 1.15rem; font-weight: 800; min-width: 40px; text-align: right; }
+        .qty-ok { color: #0f172a; }
+        .qty-low { color: var(--danger); }
+        .btn-action-small {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            padding: 4px 6px;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .log-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        .log-table th, .log-table td {
+            border-bottom: 1px solid var(--border);
+            padding: 8px 4px;
+            text-align: left;
+        }
+        .log-table th { background: #f8fafc; color: #475569; }
+        .type-tag-out { background: #fee2e2; color: #b91c1c; padding: 2px 4px; border-radius: 4px; font-weight: bold; }
+        .type-tag-in { background: #dcfce7; color: #15803d; padding: 2px 4px; border-radius: 4px; font-weight: bold; }
+
+        .btn-quick-add {
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            color: #047857;
+            font-size: 0.75rem;
+            font-weight: bold;
+            border-radius: 4px;
+            padding: 2px 6px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🔧 車庫門五金庫存系統</h1>
+    <div class="sync-status">
+        <span id="statusDot" class="status-dot"></span>
+        <span id="statusText">連線中...</span>
+    </div>
+
+    <div class="mode-switch">
+        <button id="btnModeOut" class="mode-btn active-out" onclick="switchMode('out')">📦 領料出庫</button>
+        <button id="btnModeIn" class="mode-btn" onclick="requestInMode()">📥 進料入庫 (管理)</button>
+    </div>
+
+    <!-- 缺料警示看板 -->
+    <div id="alertBox" class="alert-box">
+        <div class="alert-title">⚠️ 以下五金低於警示值（10堂門基準水位）：</div>
+        <div id="alertList"></div>
+    </div>
+
+    <!-- 區塊 A：領料出庫登記區 -->
+    <div class="card" id="outSection">
+        <div class="card-title">📝 整單領料與配料試算</div>
+
+        <div class="form-group">
+            <label>領取日期</label>
+            <input type="date" id="takeDate">
+        </div>
+
+        <div class="form-group">
+            <label>用途 / 案名備註</label>
+            <input type="text" id="takePurpose" placeholder="例如：安南區張公館 / 新裝">
+        </div>
+
+        <!-- 現場規格分析計算 -->
+        <div class="calc-helper">
+            <label style="color:#0f172a; font-weight:bold; margin-bottom:6px;">📐 現場尺寸規格（智慧匹配板型與呎數）</label>
+            
+            <div class="calc-grid-2">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>板型立料選擇</label>
+                    <select id="profileType" onchange="onProfileChange()">
+                        <option value="452">452 立料</option>
+                        <option value="398">398 立料</option>
+                        <option value="custom">特殊/自訂</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>門板片數 (N)</label>
+                    <input type="number" id="doorPanels" value="5" min="2" oninput="onPanelsChange()">
+                </div>
+            </div>
+
+            <div class="calc-grid-2">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>門片開口高 (mm)</label>
+                    <input type="number" id="doorHeightMm" value="2700" placeholder="例如: 2500" oninput="onHeightMmChange()">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>換算鋼索高度 (呎)</label>
+                    <select id="doorFeet" onchange="renderCart()">
+                        <option value="7">7 呎</option>
+                        <option value="8">8 呎</option>
+                        <option value="9" selected>9 呎</option>
+                        <option value="10">10 呎</option>
+                        <option value="11">11 呎</option>
+                        <option value="custom">特殊高度</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="calc-grid-2">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>門片總寬度 (mm)</label>
+                    <input type="number" id="doorWidthMm" value="5000" placeholder="例如: 5000" oninput="renderCart()">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>彈簧條數</label>
+                    <input type="number" id="springCount" value="4" min="1" oninput="renderCart()">
+                </div>
+            </div>
+
+            <div class="calc-info-tag" id="specSummary">
+                分析：452 立料 5片門板 ➔ 換算 <strong>9呎</strong> 高度 ｜ 寬度 ≤8米 ➔ <strong>標準滑輪</strong>
+            </div>
+
+            <button class="btn-auto" onclick="generateStandardKit()">⚡ 一鍵帶入全套標準配料</button>
+        </div>
+
+        <!-- 手動加入項目 -->
+        <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+            <select id="singleAddSelect" style="flex: 1; height: 38px; font-size: 0.85rem;"></select>
+            <button class="btn-outline" style="height: 38px; white-space: nowrap;" onclick="addSingleItemToCart()">＋ 加入項目</button>
+        </div>
+
+        <!-- 待領料清單 -->
+        <label>待領料明細（右側可點擊「建議數」快速填入）：</label>
+        <div id="cartContainer"></div>
+
+        <button class="btn-submit" onclick="submitBatchTake()">確認整單領料（扣除庫存）</button>
+    </div>
+
+    <!-- 區塊 B：整批進料入庫區 -->
+    <div class="card" id="inSection" style="display: none;">
+        <div class="card-title">
+            <span>📥 整批進料補貨登記</span>
+            <button class="btn-outline" style="color:var(--danger); border-color:#cbd5e1;" onclick="switchMode('out')">✕ 退出管理</button>
+        </div>
+
+        <div class="form-group">
+            <label>進貨日期</label>
+            <input type="date" id="inDate">
+        </div>
+
+        <div class="form-group">
+            <label>進貨廠商 / 單號備註</label>
+            <input type="text" id="inNote" placeholder="例如：新進叫料 / 廠商送達">
+        </div>
+
+        <label style="margin-top: 6px;">各五金進貨數量（直接在項目填寫進貨量）：</label>
+        <div id="stockInListContainer"></div>
+
+        <button class="btn-submit btn-in-submit" onclick="submitBatchStockIn()">確認整批進料（一次增加庫存）</button>
+    </div>
+
+    <!-- 即時庫存總覽 -->
+    <div class="card">
+        <div class="card-title">
+            <span>📦 即時庫存總覽 (雲端連線)</span>
+            <button class="btn-outline" onclick="exportStockCSV()">匯出 CSV</button>
+        </div>
+        <div id="inventoryContainer"></div>
+    </div>
+
+    <!-- 進出庫歷史記錄 -->
+    <div class="card">
+        <div class="card-title">
+            <span>📋 最近進出庫紀錄</span>
+            <button class="btn-outline" style="color:var(--danger); border-color:#fca5a5;" onclick="clearLogsWithPassword()">清空紀錄</button>
+        </div>
+        <div style="overflow-x: auto;">
+            <table class="log-table">
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th>類型</th>
+                        <th>案名/備註</th>
+                        <th>異動明細</th>
+                    </tr>
+                </thead>
+                <tbody id="logList"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Firebase 設定
+        const firebaseConfig = {
+            apiKey: "AIzaSyDGl93s6TM9CaUAAd2yiFwaUnGlCyMxXbw",
+            authDomain: "inventory-b4e2a.firebaseapp.com",
+            databaseURL: "https://inventory-b4e2a-default-rtdb.firebaseio.com",
+            projectId: "inventory-b4e2a",
+            storageBucket: "inventory-b4e2a.firebasestorage.app",
+            messagingSenderId: "943210815559",
+            appId: "1:943210815559:web:4e7498558ded6648175162",
+            measurementId: "G-KWRFPJ7CHJ"
+        };
+
+        // 初始化 Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const itemsRef = db.ref('hardware_items');
+        const logsRef = db.ref('hardware_logs');
+
+        const CLEAR_LOG_PWD = '6666'; // 清空紀錄密碼
+        const STOCK_IN_PWD = '8888';  // 進料入庫管理密碼
+
+        // 預設 8 大類零件與 10 堂門警示基準值
+        const defaultHardware = [
+            { id: 101, cat: '1. 鋼索', name: '鋼索 7呎', note: '', qty: 30, safe: 20 },
+            { id: 102, cat: '1. 鋼索', name: '鋼索 8呎', note: '', qty: 30, safe: 20 },
+            { id: 103, cat: '1. 鋼索', name: '鋼索 9呎', note: '', qty: 30, safe: 20 },
+            { id: 104, cat: '1. 鋼索', name: '鋼索 10呎', note: '', qty: 30, safe: 20 },
+            { id: 105, cat: '1. 鋼索', name: '鋼索 11呎', note: '', qty: 30, safe: 20 },
+            { id: 106, cat: '1. 鋼索', name: '鋼索 特殊長度', note: '客製規格', qty: 20, safe: 20 },
+            { id: 201, cat: '2. 鋼索輪', name: '7-11呎輪 (紅標)', note: '標準高度', qty: 20, safe: 10 },
+            { id: 202, cat: '2. 鋼索輪', name: '7-11呎輪 (黑標)', note: '標準高度', qty: 20, safe: 10 },
+            { id: 203, cat: '2. 鋼索輪', name: '特殊輪 (紅標)', note: '超高門片', qty: 15, safe: 10 },
+            { id: 204, cat: '2. 鋼索輪', name: '特殊輪 (黑標)', note: '超高門片', qty: 15, safe: 10 },
+            { id: 301, cat: '3. 鋼索輪座', name: '鋼索輪座', note: '標準件', qty: 30, safe: 20 },
+            { id: 401, cat: '4. 彈簧軸承', name: '彈簧軸承', note: '軸芯傳動', qty: 50, safe: 40 },
+            { id: 501, cat: '5. 彈簧座', name: '彈簧座', note: '固定端專用', qty: 30, safe: 20 },
+            { id: 601, cat: '6. 擺夾', name: '擺夾 452 (長)', note: '孔距 335mm', qty: 50, safe: 40 },
+            { id: 602, cat: '6. 擺夾', name: '擺夾 452 (短)', note: '孔距 285mm', qty: 150, safe: 120 },
+            { id: 603, cat: '6. 擺夾', name: '擺夾 398 (長)', note: '孔距 315mm', qty: 50, safe: 40 },
+            { id: 604, cat: '6. 擺夾', name: '擺夾 398 (短)', note: '孔距 257mm', qty: 150, safe: 120 },
+            { id: 701, cat: '7. 滑輪', name: '滑輪 (1-8米用)', note: '標準門片', qty: 120, safe: 100 },
+            { id: 702, cat: '7. 滑輪', name: '滑輪 (8米以上用)', note: '超寬強化', qty: 120, safe: 100 },
+            { id: 801, cat: '8. 滑輪座', name: '滑輪座 (長方座)', note: '', qty: 120, safe: 100 },
+            { id: 802, cat: '8. 滑輪座', name: '滑輪座 (圓形座)', note: '', qty: 120, safe: 100 },
+            { id: 803, cat: '8. 滑輪座', name: '滑輪座 (正方座)', note: '', qty: 120, safe: 100 }
+        ];
+
+        let items = defaultHardware;
+        let logs = [];
+        let cart = [];
+        let inQtys = {};
+        let currentMode = 'out';
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        document.getElementById('takeDate').value = todayStr;
+        document.getElementById('inDate').value = todayStr;
+
+        // 雲端連線狀態監聽
+        db.ref('.info/connected').on('value', snap => {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            if (snap.val() === true) {
+                dot.className = 'status-dot status-online';
+                text.textContent = '雲端已連線 (即時同步中)';
+            } else {
+                dot.className = 'status-dot status-offline';
+                text.textContent = '離線中 / 嘗試連線...';
+            }
+        });
+
+        // 雲端資料即時監聽與初始化
+        itemsRef.on('value', snap => {
+            const data = snap.val();
+            if (data) {
+                items = Array.isArray(data) ? data : Object.values(data);
+            } else {
+                // 初次使用，自動將預設資料寫入雲端
+                itemsRef.set(defaultHardware);
+                items = defaultHardware;
+            }
+            render();
+        });
+
+        logsRef.on('value', snap => {
+            const data = snap.val();
+            if (data) {
+                logs = Array.isArray(data) ? data : Object.values(data);
+                logs.sort((a, b) => b.id - a.id);
+            } else {
+                logs = [];
+            }
+            renderLogs();
+        });
+
+        // 儲存至雲端
+        function saveToCloud() {
+            itemsRef.set(items);
+            logsRef.set(logs.slice(0, 50)); // 保留最新 50 筆
+        }
+
+        function requestInMode() {
+            const pwd = prompt('請輸入進料入庫管理密碼：');
+            if (pwd === null) return;
+
+            if (pwd === STOCK_IN_PWD) {
+                switchMode('in');
+            } else {
+                alert('❌ 密碼錯誤，無法進入進料管理！');
+            }
+        }
+
+        function switchMode(mode) {
+            currentMode = mode;
+            const btnOut = document.getElementById('btnModeOut');
+            const btnIn = document.getElementById('btnModeIn');
+            const secOut = document.getElementById('outSection');
+            const secIn = document.getElementById('inSection');
+
+            if (mode === 'out') {
+                btnOut.className = 'mode-btn active-out';
+                btnIn.className = 'mode-btn';
+                secOut.style.display = 'block';
+                secIn.style.display = 'none';
+            } else {
+                btnIn.className = 'mode-btn active-in';
+                btnOut.className = 'mode-btn';
+                secIn.style.display = 'block';
+                secOut.style.display = 'none';
+                renderStockInList();
+            }
+            renderInventoryAndAlerts();
+        }
+
+        function onProfileChange() {
+            syncProfileWithPanels();
+            renderCart();
+        }
+
+        function onPanelsChange() {
+            syncProfileWithPanels();
+            renderCart();
+        }
+
+        function syncProfileWithPanels() {
+            const pType = document.getElementById('profileType').value;
+            const N = Number(document.getElementById('doorPanels').value) || 5;
+            const feetSel = document.getElementById('doorFeet');
+            const hMmInput = document.getElementById('doorHeightMm');
+
+            let determinedFeet = 'custom';
+            let approxHeight = 2700;
+
+            if (pType === '452') {
+                if (N === 4) { determinedFeet = '7'; approxHeight = 2150; }
+                else if (N === 5) { determinedFeet = '9'; approxHeight = 2700; }
+                else if (N === 6) { determinedFeet = '11'; approxHeight = 3300; }
+            } else if (pType === '398') {
+                if (N === 5) { determinedFeet = '8'; approxHeight = 2500; }
+                else if (N === 6) { determinedFeet = '10'; approxHeight = 3000; }
+            }
+
+            if (determinedFeet !== 'custom') {
+                feetSel.value = determinedFeet;
+                hMmInput.value = approxHeight;
+            }
+            updateSummaryText();
+        }
+
+        function onHeightMmChange() {
+            const mm = Number(document.getElementById('doorHeightMm').value) || 0;
+            const feetSel = document.getElementById('doorFeet');
+
+            if (mm <= 2250) feetSel.value = '7';
+            else if (mm <= 2550) feetSel.value = '8';
+            else if (mm <= 2850) feetSel.value = '9';
+            else if (mm <= 3150) feetSel.value = '10';
+            else if (mm <= 3450) feetSel.value = '11';
+            else feetSel.value = 'custom';
+
+            updateSummaryText();
+            renderCart();
+        }
+
+        function updateSummaryText() {
+            const pType = document.getElementById('profileType').value;
+            const N = document.getElementById('doorPanels').value;
+            const feet = document.getElementById('doorFeet').value;
+            const wMm = Number(document.getElementById('doorWidthMm').value) || 0;
+
+            const isWide = wMm > 8000;
+            const summaryDiv = document.getElementById('specSummary');
+
+            summaryDiv.innerHTML = `分析：<strong>${pType}立料</strong> ${N}片門板 ➔ 建議 <strong>${feet === 'custom' ? '特殊高度' : feet + '呎'}</strong> ｜ 寬度 ${wMm}mm ➔ <strong>${isWide ? '8米以上強化滑輪' : '1-8米標準滑輪'}</strong>`;
+        }
+
+        function render() {
+            renderDropdowns();
+            renderCart();
+            if (currentMode === 'in') renderStockInList();
+            renderInventoryAndAlerts();
+            renderLogs();
+        }
+
+        function renderDropdowns() {
+            const selOut = document.getElementById('singleAddSelect');
+            selOut.innerHTML = '';
+            items.forEach(item => {
+                const optOut = document.createElement('option');
+                optOut.value = item.id;
+                optOut.textContent = `${item.name} ｜ 現存: ${item.qty}`;
+                selOut.appendChild(optOut);
+            });
+        }
+
+        function calculateSuggestedQty(itemId) {
+            const N = Number(document.getElementById('doorPanels').value) || 5;
+            const springs = Number(document.getElementById('springCount').value) || 4;
+            const item = items.find(i => i.id === itemId);
+            if (!item) return 1;
+
+            if (item.cat.includes('1. 鋼索')) return 2;
+            if (item.cat.includes('2. 鋼索輪')) return 1;
+            if (item.cat.includes('3. 鋼索輪座')) return 2;
+            if (item.cat.includes('4. 彈簧軸承')) return springs * 1;
+            if (item.cat.includes('5. 彈簧座')) return Math.ceil(springs / 2);
+            if (item.cat.includes('6. 擺夾')) {
+                const totalClamps = Math.max(0, (N - 1) * 4);
+                return item.name.includes('(長)') ? 4 : Math.max(0, totalClamps - 4);
+            }
+            if (item.cat.includes('7. 滑輪')) return N * 2;
+            if (item.cat.includes('8. 滑輪座')) return N * 2;
+            return 1;
+        }
+
+        function generateStandardKit() {
+            const pType = document.getElementById('profileType').value;
+            const N = Number(document.getElementById('doorPanels').value) || 5;
+            const feet = document.getElementById('doorFeet').value;
+            const wMm = Number(document.getElementById('doorWidthMm').value) || 0;
+            const springs = Number(document.getElementById('springCount').value) || 4;
+
+            const totalClamps = Math.max(0, (N - 1) * 4);
+            const shortClamps = Math.max(0, totalClamps - 4);
+
+            let cableId = 101;
+            if (feet === '8') cableId = 102;
+            else if (feet === '9') cableId = 103;
+            else if (feet === '10') cableId = 104;
+            else if (feet === '11') cableId = 105;
+            else if (feet === 'custom') cableId = 106;
+
+            let wheelRedId = (feet === 'custom') ? 203 : 201;
+            let wheelBlackId = (feet === 'custom') ? 204 : 202;
+
+            let clampLongId = (pType === '398') ? 603 : 601;
+            let clampShortId = (pType === '398') ? 604 : 602;
+
+            let pulleyId = (wMm > 8000) ? 702 : 701;
+
+            cart = [
+                { id: cableId, qty: 2 },
+                { id: wheelRedId, qty: 1 },
+                { id: wheelBlackId, qty: 1 },
+                { id: 301, qty: 2 },
+                { id: 401, qty: springs * 1 },
+                { id: 501, qty: Math.ceil(springs / 2) },
+                { id: clampLongId, qty: 4 },
+                { id: clampShortId, qty: shortClamps },
+                { id: pulleyId, qty: N * 2 },
+                { id: 801, qty: N * 2 }
+            ].filter(c => c.qty > 0);
+
+            renderCart();
+        }
+
+        function addSingleItemToCart() {
+            const id = Number(document.getElementById('singleAddSelect').value);
+            const suggest = calculateSuggestedQty(id);
+            const exist = cart.find(c => c.id === id);
+            if (exist) exist.qty += 1;
+            else cart.push({ id, qty: suggest });
+            renderCart();
+        }
+
+        function renderCart() {
+            updateSummaryText();
+            const container = document.getElementById('cartContainer');
+            container.innerHTML = '';
+
+            if (cart.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:#94a3b8; padding:12px; font-size:0.85rem;">尚未加入任何零件，請點上方「⚡ 一鍵帶入全套標準配料」</div>';
+                return;
+            }
+
+            cart.forEach((cItem, index) => {
+                const item = items.find(i => i.id === cItem.id);
+                if (!item) return;
+
+                const suggested = calculateSuggestedQty(item.id);
+
+                const row = document.createElement('div');
+                row.className = 'cart-item';
+                row.innerHTML = `
+                    <div class="cart-item-info">
+                        <div class="cart-item-name">${item.name}</div>
+                        <div class="cart-item-stock">${item.note ? item.note + ' ｜ ' : ''}現存: ${item.qty}</div>
+                    </div>
+                    <div class="cart-right-controls">
+                        <div class="suggest-badge" onclick="applyItemSuggested(${index}, ${suggested})" title="點擊直接套用建議數">
+                            <span>建議</span>
+                            ${suggested}
+                        </div>
+                        <div class="cart-stepper">
+                            <button class="cart-btn-step" onclick="updateCartQty(${index}, -1)">−</button>
+                            <input type="number" class="cart-input-qty" value="${cItem.qty}" min="1" onchange="setCartInputQty(${index}, this.value)">
+                            <button class="cart-btn-step" onclick="updateCartQty(${index}, 1)">＋</button>
+                        </div>
+                        <button class="cart-del-btn" onclick="removeCartItem(${index})">✕</button>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function applyItemSuggested(index, suggestVal) {
+            cart[index].qty = suggestVal;
+            renderCart();
+        }
+
+        function updateCartQty(index, delta) {
+            cart[index].qty += delta;
+            if (cart[index].qty <= 0) cart.splice(index, 1);
+            renderCart();
+        }
+
+        function setCartInputQty(index, val) {
+            const num = Number(val);
+            if (num > 0) cart[index].qty = num;
+            else cart.splice(index, 1);
+            renderCart();
+        }
+
+        function removeCartItem(index) {
+            cart.splice(index, 1);
+            renderCart();
+        }
+
+        function submitBatchTake() {
+            if (cart.length === 0) {
+                alert('待領料清單是空的！');
+                return;
+            }
+
+            const date = document.getElementById('takeDate').value;
+            const purpose = document.getElementById('takePurpose').value.trim() || '現場裝配';
+
+            if (!date) {
+                alert('請選擇領取日期');
+                return;
+            }
+
+            let shortageMsg = '';
+            cart.forEach(c => {
+                const item = items.find(i => i.id === c.id);
+                if (item && item.qty < c.qty) {
+                    shortageMsg += `• ${item.name} (現存 ${item.qty}，領用 ${c.qty})\n`;
+                }
+            });
+
+            if (shortageMsg) {
+                if (!confirm(`注意！以下料件庫存不足：\n\n${shortageMsg}\n是否確定要繼續領料？`)) return;
+            }
+
+            let logDetails = [];
+            cart.forEach(c => {
+                const item = items.find(i => i.id === c.id);
+                if (item) {
+                    item.qty -= c.qty;
+                    logDetails.push(`${item.name} × ${c.qty}`);
+                }
+            });
+
+            logs.unshift({
+                id: Date.now(),
+                type: 'out',
+                date,
+                purpose,
+                details: logDetails.join('、')
+            });
+
+            cart = [];
+            document.getElementById('takePurpose').value = '';
+            saveToCloud();
+            alert('🎉 整單領料成功！雲端庫存已同步扣除。');
+        }
+
+        function renderStockInList() {
+            const container = document.getElementById('stockInListContainer');
+            container.innerHTML = '';
+
+            let currentCat = '';
+            items.forEach(item => {
+                if (item.cat !== currentCat) {
+                    currentCat = item.cat;
+                    const catHeader = document.createElement('div');
+                    catHeader.className = 'category-header';
+                    catHeader.textContent = currentCat;
+                    container.appendChild(catHeader);
+                }
+
+                const currentVal = inQtys[item.id] || 0;
+                const row = document.createElement('div');
+                row.className = 'cart-item';
+                row.innerHTML = `
+                    <div class="cart-item-info">
+                        <div class="cart-item-name">${item.name}</div>
+                        <div class="cart-item-stock">${item.note ? item.note + ' ｜ ' : ''}現存: ${item.qty}</div>
+                    </div>
+                    <div class="cart-right-controls">
+                        <button class="btn-quick-add" onclick="quickAddInQty(${item.id}, 10)">+10</button>
+                        <button class="btn-quick-add" onclick="quickAddInQty(${item.id}, 20)">+20</button>
+                        <div class="cart-stepper">
+                            <button class="cart-btn-step" onclick="changeInQty(${item.id}, -1)">−</button>
+                            <input type="number" class="cart-input-qty" id="in_input_${item.id}" value="${currentVal}" min="0" onchange="setInQty(${item.id}, this.value)">
+                            <button class="cart-btn-step" onclick="changeInQty(${item.id}, 1)">＋</button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function changeInQty(id, delta) {
+            let val = (inQtys[id] || 0) + delta;
+            if (val < 0) val = 0;
+            inQtys[id] = val;
+            const input = document.getElementById(`in_input_${id}`);
+            if (input) input.value = val;
+        }
+
+        function quickAddInQty(id, delta) {
+            let val = (inQtys[id] || 0) + delta;
+            inQtys[id] = val;
+            const input = document.getElementById(`in_input_${id}`);
+            if (input) input.value = val;
+        }
+
+        function setInQty(id, val) {
+            let num = Number(val);
+            if (isNaN(num) || num < 0) num = 0;
+            inQtys[id] = num;
+        }
+
+        function submitBatchStockIn() {
+            const date = document.getElementById('inDate').value;
+            const note = document.getElementById('inNote').value.trim() || '叫料進貨';
+
+            if (!date) {
+                alert('請選擇進貨日期');
+                return;
+            }
+
+            let logDetails = [];
+            let updatedCount = 0;
+
+            items.forEach(item => {
+                const addCount = inQtys[item.id] || 0;
+                if (addCount > 0) {
+                    item.qty += addCount;
+                    logDetails.push(`${item.name} ＋${addCount}`);
+                    updatedCount++;
+                }
+            });
+
+            if (updatedCount === 0) {
+                alert('請至少在一個零件填寫大於 0 的進貨數量！');
+                return;
+            }
+
+            logs.unshift({
+                id: Date.now(),
+                type: 'in',
+                date,
+                purpose: note,
+                details: logDetails.join('、')
+            });
+
+            inQtys = {};
+            document.getElementById('inNote').value = '';
+            saveToCloud();
+            alert(`🎉 整批進料成功！已同步增加 ${updatedCount} 項雲端五金庫存。`);
+            switchMode('out');
+        }
+
+        function renderInventoryAndAlerts() {
+            const container = document.getElementById('inventoryContainer');
+            const alertBox = document.getElementById('alertBox');
+            const alertList = document.getElementById('alertList');
+
+            container.innerHTML = '';
+            alertList.innerHTML = '';
+
+            let lowCount = 0;
+            let currentCat = '';
+
+            items.forEach(item => {
+                const isLow = Number(item.qty) <= Number(item.safe);
+                if (isLow) {
+                    lowCount++;
+                    const aItem = document.createElement('div');
+                    aItem.className = 'alert-item';
+                    aItem.innerHTML = `• <strong>${item.name}</strong> 僅剩 <strong>${item.qty}</strong> (警示值: ${item.safe})`;
+                    alertList.appendChild(aItem);
+                }
+
+                if (item.cat !== currentCat) {
+                    currentCat = item.cat;
+                    const catHeader = document.createElement('div');
+                    catHeader.className = 'category-header';
+                    catHeader.textContent = currentCat;
+                    container.appendChild(catHeader);
+                }
+
+                const row = document.createElement('div');
+                row.className = 'stock-row';
+                
+                const actionButtons = (currentMode === 'in') ? `
+                    <button class="btn-action-small" onclick="editStockQty(${item.id})">改庫存</button>
+                    <button class="btn-action-small" style="color:var(--warning); border-color:#fde68a;" onclick="editStockSafe(${item.id})">改警示</button>
+                ` : '';
+
+                row.innerHTML = `
+                    <div>
+                        <div class="stock-name">${item.name}</div>
+                        <div class="stock-note">${item.note ? item.note + ' ｜ ' : ''}警示值: <strong>${item.safe}</strong></div>
+                    </div>
+                    <div class="stock-right">
+                        <div class="stock-qty ${isLow ? 'qty-low' : 'qty-ok'}">${item.qty}</div>
+                        ${actionButtons}
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+
+            alertBox.style.display = lowCount > 0 ? 'block' : 'none';
+        }
+
+        function editStockSafe(id) {
+            const item = items.find(i => i.id === id);
+            if (!item) return;
+
+            const val = prompt(`設定【${item.name}】的警示值（當前: ${item.safe}）：`, item.safe);
+            if (val !== null) {
+                const num = Number(val);
+                if (!isNaN(num) && num >= 0) {
+                    item.safe = num;
+                    saveToCloud();
+                } else {
+                    alert('請輸入有效數字');
+                }
+            }
+        }
+
+        function editStockQty(id) {
+            const item = items.find(i => i.id === id);
+            if (!item) return;
+
+            const val = prompt(`調整【${item.name}】目前庫存量：`, item.qty);
+            if (val !== null) {
+                const num = Number(val);
+                if (!isNaN(num) && num >= 0) {
+                    item.qty = num;
+                    saveToCloud();
+                } else {
+                    alert('請輸入有效數字');
+                }
+            }
+        }
+
+        function renderLogs() {
+            const tbody = document.getElementById('logList');
+            tbody.innerHTML = '';
+
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding:12px;">尚無紀錄</td></tr>';
+                return;
+            }
+
+            logs.slice(0, 20).forEach(log => {
+                const isOut = log.type !== 'in';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="white-space:nowrap;">${log.date.slice(5)}</td>
+                    <td><span class="${isOut ? 'type-tag-out' : 'type-tag-in'}">${isOut ? '出庫' : '入庫'}</span></td>
+                    <td style="font-weight:bold;">${log.purpose}</td>
+                    <td style="font-size:0.78rem; color:#334155;">${log.details}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function clearLogsWithPassword() {
+            const pwd = prompt('請輸入管理密碼以清空進出庫紀錄：');
+            if (pwd === null) return;
+
+            if (pwd === CLEAR_LOG_PWD) {
+                if (confirm('密碼正確。確定要清空所有進出庫紀錄嗎？（不影響目前庫存數量）')) {
+                    logs = [];
+                    logsRef.set([]);
+                    alert('已成功清空所有紀錄！');
+                }
+            } else {
+                alert('❌ 密碼錯誤，操作已取消！');
+            }
+        }
+
+        function exportStockCSV() {
+            let csv = '\uFEFF類別,零件名稱,備註/孔距,目前庫存,警示值\n';
+            items.forEach(i => {
+                csv += `"${i.cat}","${i.name}","${i.note}",${i.qty},${i.safe}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `車庫門五金庫存表_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+        }
+
+        // 初始化分析規格
+        syncProfileWithPanels();
+    </script>
+</body>
+</html>
