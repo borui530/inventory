@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>車庫門五金雲端同步庫存系統</title>
+    <title>車庫門五金雲端庫存與案名彙整系統</title>
     
-    <!-- Firebase SDK (相容瀏覽器直接載入版) -->
+    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -32,7 +32,6 @@
         }
         h1 { font-size: 1.2rem; margin: 4px 0 6px 0; text-align: center; color: #1e293b; }
         
-        /* 雲端連線狀態指示燈 */
         .sync-status {
             text-align: center;
             font-size: 0.75rem;
@@ -162,9 +161,7 @@
             background: var(--primary);
             margin-top: 10px;
         }
-        .btn-in-submit {
-            background: var(--success);
-        }
+        .btn-in-submit { background: var(--success); }
         .btn-outline {
             background: transparent;
             border: 1px solid var(--primary);
@@ -310,6 +307,23 @@
             padding: 2px 6px;
             cursor: pointer;
         }
+
+        /* 案名搜尋與統計彙整卡片 */
+        .search-wrapper {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .summary-modal {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            display: none;
+        }
+        .summary-title { font-size: 0.9rem; font-weight: bold; color: var(--primary); margin-bottom: 6px; }
+        .summary-list { font-size: 0.82rem; color: #1e293b; line-height: 1.5; }
     </style>
 </head>
 <body>
@@ -338,6 +352,12 @@
         <div class="form-group">
             <label>領取日期</label>
             <input type="date" id="takeDate">
+        </div>
+
+        <!-- 新增：領料人員 -->
+        <div class="form-group">
+            <label>領料人員姓名</label>
+            <input type="text" id="takeUser" placeholder="請輸入姓名（例如：阿傑）">
         </div>
 
         <div class="form-group">
@@ -426,6 +446,11 @@
         </div>
 
         <div class="form-group">
+            <label>進貨經手人</label>
+            <input type="text" id="inUser" placeholder="請輸入經手人姓名">
+        </div>
+
+        <div class="form-group">
             <label>進貨廠商 / 單號備註</label>
             <input type="text" id="inNote" placeholder="例如：新進叫料 / 廠商送達">
         </div>
@@ -445,19 +470,32 @@
         <div id="inventoryContainer"></div>
     </div>
 
-    <!-- 進出庫歷史記錄 -->
+    <!-- 進出庫歷史記錄與案名彙整 -->
     <div class="card">
         <div class="card-title">
-            <span>📋 最近進出庫紀錄</span>
+            <span>📋 進出庫紀錄與案名彙整</span>
             <button class="btn-outline" style="color:var(--danger); border-color:#fca5a5;" onclick="clearLogsWithPassword()">清空紀錄</button>
         </div>
+
+        <!-- 案名搜尋與統計按鈕 -->
+        <div class="search-wrapper">
+            <input type="text" id="searchKeyword" style="height: 38px; font-size: 0.9rem;" placeholder="🔍 搜尋案名、人員或用途..." oninput="filterLogs()">
+            <button class="btn-outline" style="height: 38px; white-space: nowrap; font-weight: bold;" onclick="calculateProjectSummary()">📊 統計此案總用料</button>
+        </div>
+
+        <!-- 案名總用料彙整面板 -->
+        <div id="projectSummaryBox" class="summary-modal">
+            <div class="summary-title" id="summaryTitle">📊 案名用料彙整統計</div>
+            <div class="summary-list" id="summaryContent"></div>
+        </div>
+
         <div style="overflow-x: auto;">
             <table class="log-table">
                 <thead>
                     <tr>
                         <th>日期</th>
-                        <th>類型</th>
-                        <th>案名/備註</th>
+                        <th>人員</th>
+                        <th>案名/用途</th>
                         <th>異動明細</th>
                     </tr>
                 </thead>
@@ -479,16 +517,14 @@
             measurementId: "G-KWRFPJ7CHJ"
         };
 
-        // 初始化 Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         const itemsRef = db.ref('hardware_items');
         const logsRef = db.ref('hardware_logs');
 
-        const CLEAR_LOG_PWD = '6666'; // 清空紀錄密碼
-        const STOCK_IN_PWD = '8888';  // 進料入庫管理密碼
+        const CLEAR_LOG_PWD = '6666';
+        const STOCK_IN_PWD = '8888';
 
-        // 預設 8 大類零件與 10 堂門警示基準值
         const defaultHardware = [
             { id: 101, cat: '1. 鋼索', name: '鋼索 7呎', note: '', qty: 30, safe: 20 },
             { id: 102, cat: '1. 鋼索', name: '鋼索 8呎', note: '', qty: 30, safe: 20 },
@@ -524,7 +560,13 @@
         document.getElementById('takeDate').value = todayStr;
         document.getElementById('inDate').value = todayStr;
 
-        // 雲端連線狀態監聽
+        // 自動還原上次記錄的領料人姓名
+        const cachedUser = localStorage.getItem('LAST_STOCK_USER');
+        if (cachedUser) {
+            document.getElementById('takeUser').value = cachedUser;
+            document.getElementById('inUser').value = cachedUser;
+        }
+
         db.ref('.info/connected').on('value', snap => {
             const dot = document.getElementById('statusDot');
             const text = document.getElementById('statusText');
@@ -537,13 +579,11 @@
             }
         });
 
-        // 雲端資料即時監聽與初始化
         itemsRef.on('value', snap => {
             const data = snap.val();
             if (data) {
                 items = Array.isArray(data) ? data : Object.values(data);
             } else {
-                // 初次使用，自動將預設資料寫入雲端
                 itemsRef.set(defaultHardware);
                 items = defaultHardware;
             }
@@ -561,21 +601,16 @@
             renderLogs();
         });
 
-        // 儲存至雲端
         function saveToCloud() {
             itemsRef.set(items);
-            logsRef.set(logs.slice(0, 50)); // 保留最新 50 筆
+            logsRef.set(logs.slice(0, 100)); // 保留最新 100 筆
         }
 
         function requestInMode() {
             const pwd = prompt('請輸入進料入庫管理密碼：');
             if (pwd === null) return;
-
-            if (pwd === STOCK_IN_PWD) {
-                switchMode('in');
-            } else {
-                alert('❌ 密碼錯誤，無法進入進料管理！');
-            }
+            if (pwd === STOCK_IN_PWD) switchMode('in');
+            else alert('❌ 密碼錯誤，無法進入進料管理！');
         }
 
         function switchMode(mode) {
@@ -600,15 +635,8 @@
             renderInventoryAndAlerts();
         }
 
-        function onProfileChange() {
-            syncProfileWithPanels();
-            renderCart();
-        }
-
-        function onPanelsChange() {
-            syncProfileWithPanels();
-            renderCart();
-        }
+        function onProfileChange() { syncProfileWithPanels(); renderCart(); }
+        function onPanelsChange() { syncProfileWithPanels(); renderCart(); }
 
         function syncProfileWithPanels() {
             const pType = document.getElementById('profileType').value;
@@ -658,7 +686,6 @@
 
             const isWide = wMm > 8000;
             const summaryDiv = document.getElementById('specSummary');
-
             summaryDiv.innerHTML = `分析：<strong>${pType}立料</strong> ${N}片門板 ➔ 建議 <strong>${feet === 'custom' ? '特殊高度' : feet + '呎'}</strong> ｜ 寬度 ${wMm}mm ➔ <strong>${isWide ? '8米以上強化滑輪' : '1-8米標準滑輪'}</strong>`;
         }
 
@@ -791,42 +818,31 @@
             });
         }
 
-        function applyItemSuggested(index, suggestVal) {
-            cart[index].qty = suggestVal;
-            renderCart();
-        }
-
+        function applyItemSuggested(index, suggestVal) { cart[index].qty = suggestVal; renderCart(); }
         function updateCartQty(index, delta) {
             cart[index].qty += delta;
             if (cart[index].qty <= 0) cart.splice(index, 1);
             renderCart();
         }
-
         function setCartInputQty(index, val) {
             const num = Number(val);
             if (num > 0) cart[index].qty = num;
             else cart.splice(index, 1);
             renderCart();
         }
+        function removeCartItem(index) { cart.splice(index, 1); renderCart(); }
 
-        function removeCartItem(index) {
-            cart.splice(index, 1);
-            renderCart();
-        }
-
+        // 領料出庫確認
         function submitBatchTake() {
-            if (cart.length === 0) {
-                alert('待領料清單是空的！');
-                return;
-            }
+            if (cart.length === 0) { alert('待領料清單是空的！'); return; }
 
             const date = document.getElementById('takeDate').value;
+            const user = document.getElementById('takeUser').value.trim() || '現場人員';
             const purpose = document.getElementById('takePurpose').value.trim() || '現場裝配';
 
-            if (!date) {
-                alert('請選擇領取日期');
-                return;
-            }
+            if (!date) { alert('請選擇領取日期'); return; }
+
+            localStorage.setItem('LAST_STOCK_USER', user);
 
             let shortageMsg = '';
             cart.forEach(c => {
@@ -853,6 +869,7 @@
                 id: Date.now(),
                 type: 'out',
                 date,
+                user,
                 purpose,
                 details: logDetails.join('、')
             });
@@ -860,7 +877,7 @@
             cart = [];
             document.getElementById('takePurpose').value = '';
             saveToCloud();
-            alert('🎉 整單領料成功！雲端庫存已同步扣除。');
+            alert(`🎉 整單領料成功！領料人：${user}，已扣除雲端庫存。`);
         }
 
         function renderStockInList() {
@@ -922,12 +939,12 @@
 
         function submitBatchStockIn() {
             const date = document.getElementById('inDate').value;
+            const user = document.getElementById('inUser').value.trim() || '廠內人員';
             const note = document.getElementById('inNote').value.trim() || '叫料進貨';
 
-            if (!date) {
-                alert('請選擇進貨日期');
-                return;
-            }
+            if (!date) { alert('請選擇進貨日期'); return; }
+
+            localStorage.setItem('LAST_STOCK_USER', user);
 
             let logDetails = [];
             let updatedCount = 0;
@@ -950,6 +967,7 @@
                 id: Date.now(),
                 type: 'in',
                 date,
+                user,
                 purpose: note,
                 details: logDetails.join('、')
             });
@@ -957,7 +975,7 @@
             inQtys = {};
             document.getElementById('inNote').value = '';
             saveToCloud();
-            alert(`🎉 整批進料成功！已同步增加 ${updatedCount} 項雲端五金庫存。`);
+            alert(`🎉 整批進料成功！經手人：${user}，已增加 ${updatedCount} 項雲端庫存。`);
             switchMode('out');
         }
 
@@ -1024,9 +1042,7 @@
                 if (!isNaN(num) && num >= 0) {
                     item.safe = num;
                     saveToCloud();
-                } else {
-                    alert('請輸入有效數字');
-                }
+                } else alert('請輸入有效數字');
             }
         }
 
@@ -1040,32 +1056,99 @@
                 if (!isNaN(num) && num >= 0) {
                     item.qty = num;
                     saveToCloud();
-                } else {
-                    alert('請輸入有效數字');
-                }
+                } else alert('請輸入有效數字');
             }
+        }
+
+        // 搜尋與渲染歷史記錄
+        function filterLogs() {
+            renderLogs();
         }
 
         function renderLogs() {
             const tbody = document.getElementById('logList');
+            const keyword = (document.getElementById('searchKeyword')?.value || '').trim().toLowerCase();
             tbody.innerHTML = '';
 
-            if (logs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding:12px;">尚無紀錄</td></tr>';
+            let filtered = logs;
+            if (keyword) {
+                filtered = logs.filter(l => 
+                    (l.purpose && l.purpose.toLowerCase().includes(keyword)) ||
+                    (l.user && l.user.toLowerCase().includes(keyword)) ||
+                    (l.details && l.details.toLowerCase().includes(keyword))
+                );
+            }
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding:12px;">查無符合紀錄</td></tr>';
                 return;
             }
 
-            logs.slice(0, 20).forEach(log => {
+            filtered.slice(0, 30).forEach(log => {
                 const isOut = log.type !== 'in';
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td style="white-space:nowrap;">${log.date.slice(5)}</td>
-                    <td><span class="${isOut ? 'type-tag-out' : 'type-tag-in'}">${isOut ? '出庫' : '入庫'}</span></td>
+                    <td style="font-weight:600; color:#475569;">${log.user || '-'}</td>
                     <td style="font-weight:bold;">${log.purpose}</td>
-                    <td style="font-size:0.78rem; color:#334155;">${log.details}</td>
+                    <td style="font-size:0.78rem; color:#334155;">
+                        <span class="${isOut ? 'type-tag-out' : 'type-tag-in'}" style="margin-right:4px;">${isOut ? '出' : '入'}</span>
+                        ${log.details}
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
+        }
+
+        // 功能2：案名總用料彙整統計
+        function calculateProjectSummary() {
+            const keyword = (document.getElementById('searchKeyword').value || '').trim();
+            const summaryBox = document.getElementById('projectSummaryBox');
+            const titleEl = document.getElementById('summaryTitle');
+            const contentEl = document.getElementById('summaryContent');
+
+            if (!keyword) {
+                alert('請先在搜尋框輸入要統計的【案名】關鍵字（例如：張公館）');
+                return;
+            }
+
+            // 抓取符合該案名的所有出庫 (領料) 記錄
+            const matchedLogs = logs.filter(l => 
+                l.type === 'out' && 
+                l.purpose && 
+                l.purpose.toLowerCase().includes(keyword.toLowerCase())
+            );
+
+            if (matchedLogs.length === 0) {
+                alert(`查無【${keyword}】的出庫領料記錄！`);
+                summaryBox.style.display = 'none';
+                return;
+            }
+
+            // 統計各五金用量加總
+            let totalMap = {};
+            matchedLogs.forEach(l => {
+                if (!l.details) return;
+                const parts = l.details.split('、');
+                parts.forEach(p => {
+                    const match = p.trim().match(/^(.+)\s*×\s*(\d+)$/);
+                    if (match) {
+                        const name = match[1].trim();
+                        const qty = Number(match[2]);
+                        totalMap[name] = (totalMap[name] || 0) + qty;
+                    }
+                });
+            });
+
+            titleEl.innerHTML = `📊 【${keyword}】歷次領料加總彙整 (共 ${matchedLogs.length} 筆領料單)`;
+            let listHtml = '<ul style="margin:6px 0; padding-left:20px;">';
+            for (let [name, qty] of Object.entries(totalMap)) {
+                listHtml += `<li><strong>${name}</strong>：共領用 <strong>${qty}</strong></li>`;
+            }
+            listHtml += '</ul>';
+
+            contentEl.innerHTML = listHtml;
+            summaryBox.style.display = 'block';
         }
 
         function clearLogsWithPassword() {
@@ -1076,11 +1159,10 @@
                 if (confirm('密碼正確。確定要清空所有進出庫紀錄嗎？（不影響目前庫存數量）')) {
                     logs = [];
                     logsRef.set([]);
+                    document.getElementById('projectSummaryBox').style.display = 'none';
                     alert('已成功清空所有紀錄！');
                 }
-            } else {
-                alert('❌ 密碼錯誤，操作已取消！');
-            }
+            } else alert('❌ 密碼錯誤，操作已取消！');
         }
 
         function exportStockCSV() {
@@ -1095,7 +1177,6 @@
             a.click();
         }
 
-        // 初始化分析規格
         syncProfileWithPanels();
     </script>
 </body>
