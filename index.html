@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>車庫門五金雲端庫存與案名彙整系統</title>
+    <title>車庫門五金雲端庫存系統</title>
     
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -112,6 +112,22 @@
             color: var(--text);
         }
         input:focus, select:focus { border-color: var(--primary); }
+
+        .btn-nfc {
+            background: #f1f5f9;
+            border: 1px solid #94a3b8;
+            color: #0f172a;
+            padding: 0 10px;
+            height: 44px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            white-space: nowrap;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
 
         .calc-helper {
             background: #f1f5f9;
@@ -308,12 +324,7 @@
             cursor: pointer;
         }
 
-        /* 案名搜尋與統計彙整卡片 */
-        .search-wrapper {
-            display: flex;
-            gap: 6px;
-            margin-bottom: 10px;
-        }
+        .search-wrapper { display: flex; gap: 6px; margin-bottom: 10px; }
         .summary-modal {
             background: #eff6ff;
             border: 1px solid #bfdbfe;
@@ -324,6 +335,15 @@
         }
         .summary-title { font-size: 0.9rem; font-weight: bold; color: var(--primary); margin-bottom: 6px; }
         .summary-list { font-size: 0.82rem; color: #1e293b; line-height: 1.5; }
+
+        /* 新增品項展開區塊 */
+        .add-item-box {
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 14px;
+        }
     </style>
 </head>
 <body>
@@ -354,10 +374,12 @@
             <input type="date" id="takeDate">
         </div>
 
-        <!-- 新增：領料人員 -->
         <div class="form-group">
             <label>領料人員姓名</label>
-            <input type="text" id="takeUser" placeholder="請輸入姓名（例如：阿傑）">
+            <div style="display: flex; gap: 6px;">
+                <input type="text" id="takeUser" placeholder="請輸入姓名（例如：阿傑）">
+                <button type="button" class="btn-nfc" onclick="scanNfc('takeUser')" title="手機靠近晶片感應">📱 逼晶片</button>
+            </div>
         </div>
 
         <div class="form-group">
@@ -433,7 +455,7 @@
         <button class="btn-submit" onclick="submitBatchTake()">確認整單領料（扣除庫存）</button>
     </div>
 
-    <!-- 區塊 B：整批進料入庫區 -->
+    <!-- 區塊 B：整批進料與管理後台區 -->
     <div class="card" id="inSection" style="display: none;">
         <div class="card-title">
             <span>📥 整批進料補貨登記</span>
@@ -447,12 +469,43 @@
 
         <div class="form-group">
             <label>進貨經手人</label>
-            <input type="text" id="inUser" placeholder="請輸入經手人姓名">
+            <div style="display: flex; gap: 6px;">
+                <input type="text" id="inUser" placeholder="請輸入經手人姓名">
+                <button type="button" class="btn-nfc" onclick="scanNfc('inUser')">📱 逼晶片</button>
+            </div>
         </div>
 
         <div class="form-group">
             <label>進貨廠商 / 單號備註</label>
             <input type="text" id="inNote" placeholder="例如：新進叫料 / 廠商送達">
+        </div>
+
+        <!-- 新增自訂物品面板 -->
+        <div class="add-item-box">
+            <div style="font-weight: bold; font-size: 0.9rem; color: #1e293b; margin-bottom: 8px;">➕ 新增自訂五金品項</div>
+            <div class="form-group">
+                <label>所屬分類名稱</label>
+                <input type="text" id="newCatName" placeholder="例如：9. 特殊配件 / 1. 鋼索">
+            </div>
+            <div class="form-group">
+                <label>五金名稱</label>
+                <input type="text" id="newItemName" placeholder="例如：304強化加厚鉸鏈">
+            </div>
+            <div class="form-group">
+                <label>規格 / 孔距備註 (選填)</label>
+                <input type="text" id="newItemNote" placeholder="例如：厚度3.0mm / 孔距120">
+            </div>
+            <div class="calc-grid-2">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>初始庫存量</label>
+                    <input type="number" id="newItemQty" value="20" min="0">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>警示水位值</label>
+                    <input type="number" id="newItemSafe" value="10" min="0">
+                </div>
+            </div>
+            <button class="btn-outline" style="width: 100%; height: 40px; margin-top: 10px; font-weight: bold; background: #fff;" onclick="addNewHardwareItem()">＋ 確認新增品項至雲端</button>
         </div>
 
         <label style="margin-top: 6px;">各五金進貨數量（直接在項目填寫進貨量）：</label>
@@ -477,13 +530,11 @@
             <button class="btn-outline" style="color:var(--danger); border-color:#fca5a5;" onclick="clearLogsWithPassword()">清空紀錄</button>
         </div>
 
-        <!-- 案名搜尋與統計按鈕 -->
         <div class="search-wrapper">
             <input type="text" id="searchKeyword" style="height: 38px; font-size: 0.9rem;" placeholder="🔍 搜尋案名、人員或用途..." oninput="filterLogs()">
             <button class="btn-outline" style="height: 38px; white-space: nowrap; font-weight: bold;" onclick="calculateProjectSummary()">📊 統計此案總用料</button>
         </div>
 
-        <!-- 案名總用料彙整面板 -->
         <div id="projectSummaryBox" class="summary-modal">
             <div class="summary-title" id="summaryTitle">📊 案名用料彙整統計</div>
             <div class="summary-list" id="summaryContent"></div>
@@ -560,11 +611,50 @@
         document.getElementById('takeDate').value = todayStr;
         document.getElementById('inDate').value = todayStr;
 
-        // 自動還原上次記錄的領料人姓名
-        const cachedUser = localStorage.getItem('LAST_STOCK_USER');
-        if (cachedUser) {
-            document.getElementById('takeUser').value = cachedUser;
-            document.getElementById('inUser').value = cachedUser;
+        const urlParams = new URLSearchParams(window.location.search);
+        const userParam = urlParams.get('user') || urlParams.get('name');
+        if (userParam) {
+            document.getElementById('takeUser').value = decodeURIComponent(userParam);
+            document.getElementById('inUser').value = decodeURIComponent(userParam);
+            localStorage.setItem('LAST_STOCK_USER', decodeURIComponent(userParam));
+        } else {
+            const cachedUser = localStorage.getItem('LAST_STOCK_USER');
+            if (cachedUser) {
+                document.getElementById('takeUser').value = cachedUser;
+                document.getElementById('inUser').value = cachedUser;
+            }
+        }
+
+        async function scanNfc(targetInputId) {
+            if ('NDEFReader' in window) {
+                try {
+                    const ndef = new NDEFReader();
+                    await ndef.scan();
+                    alert('📡 請將手機背面靠近 NFC 晶片貼片...');
+                    
+                    ndef.onreading = event => {
+                        const decoder = new TextDecoder();
+                        for (const record of event.message.records) {
+                            let text = decoder.decode(record.data);
+                            if (text.includes('user=')) {
+                                const match = text.match(/user=([^&]+)/);
+                                if (match) text = decodeURIComponent(match[1]);
+                            }
+                            text = text.trim();
+                            if (text) {
+                                document.getElementById(targetInputId).value = text;
+                                localStorage.setItem('LAST_STOCK_USER', text);
+                                alert(`✅ 晶片感應成功！人員：${text}`);
+                                break;
+                            }
+                        }
+                    };
+                } catch (error) {
+                    alert('NFC 讀取失敗或權限未開啟：' + error.message);
+                }
+            } else {
+                alert('提示：此手機瀏覽器未直接支援 Web NFC 按鈕，請直接使用手機靠近燒錄好專屬網址的 NFC 貼片感應開啟！');
+            }
         }
 
         db.ref('.info/connected').on('value', snap => {
@@ -603,7 +693,52 @@
 
         function saveToCloud() {
             itemsRef.set(items);
-            logsRef.set(logs.slice(0, 100)); // 保留最新 100 筆
+            logsRef.set(logs.slice(0, 100));
+        }
+
+        // 新增自訂五金零件
+        function addNewHardwareItem() {
+            const cat = document.getElementById('newCatName').value.trim() || '9. 其他自訂配件';
+            const name = document.getElementById('newItemName').value.trim();
+            const note = document.getElementById('newItemNote').value.trim();
+            const qty = Number(document.getElementById('newItemQty').value) || 0;
+            const safe = Number(document.getElementById('newItemSafe').value) || 10;
+
+            if (!name) {
+                alert('請輸入五金名稱！');
+                return;
+            }
+
+            const newItem = {
+                id: Date.now(),
+                cat,
+                name,
+                note,
+                qty,
+                safe
+            };
+
+            items.push(newItem);
+            saveToCloud();
+
+            document.getElementById('newItemName').value = '';
+            document.getElementById('newItemNote').value = '';
+            document.getElementById('newItemQty').value = '20';
+            document.getElementById('newItemSafe').value = '10';
+
+            alert(`🎉 成功新增品項【${name}】！`);
+        }
+
+        // 刪除自訂五金零件
+        function deleteHardwareItem(id) {
+            const item = items.find(i => i.id === id);
+            if (!item) return;
+
+            if (confirm(`確定要自雲端刪除【${item.name}】嗎？此動作無法復原！`)) {
+                items = items.filter(i => i.id !== id);
+                saveToCloud();
+                alert(`已刪除【${item.name}】！`);
+            }
         }
 
         function requestInMode() {
@@ -832,7 +967,6 @@
         }
         function removeCartItem(index) { cart.splice(index, 1); renderCart(); }
 
-        // 領料出庫確認
         function submitBatchTake() {
             if (cart.length === 0) { alert('待領料清單是空的！'); return; }
 
@@ -1014,6 +1148,7 @@
                 const actionButtons = (currentMode === 'in') ? `
                     <button class="btn-action-small" onclick="editStockQty(${item.id})">改庫存</button>
                     <button class="btn-action-small" style="color:var(--warning); border-color:#fde68a;" onclick="editStockSafe(${item.id})">改警示</button>
+                    <button class="btn-action-small" style="color:var(--danger); border-color:#fca5a5;" onclick="deleteHardwareItem(${item.id})">刪除</button>
                 ` : '';
 
                 row.innerHTML = `
@@ -1060,10 +1195,7 @@
             }
         }
 
-        // 搜尋與渲染歷史記錄
-        function filterLogs() {
-            renderLogs();
-        }
+        function filterLogs() { renderLogs(); }
 
         function renderLogs() {
             const tbody = document.getElementById('logList');
@@ -1100,7 +1232,6 @@
             });
         }
 
-        // 功能2：案名總用料彙整統計
         function calculateProjectSummary() {
             const keyword = (document.getElementById('searchKeyword').value || '').trim();
             const summaryBox = document.getElementById('projectSummaryBox');
@@ -1112,7 +1243,6 @@
                 return;
             }
 
-            // 抓取符合該案名的所有出庫 (領料) 記錄
             const matchedLogs = logs.filter(l => 
                 l.type === 'out' && 
                 l.purpose && 
@@ -1125,7 +1255,6 @@
                 return;
             }
 
-            // 統計各五金用量加總
             let totalMap = {};
             matchedLogs.forEach(l => {
                 if (!l.details) return;
