@@ -113,22 +113,6 @@
         }
         input:focus, select:focus { border-color: var(--primary); }
 
-        .btn-nfc {
-            background: #f1f5f9;
-            border: 1px solid #94a3b8;
-            color: #0f172a;
-            padding: 0 10px;
-            height: 44px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            font-weight: bold;
-            white-space: nowrap;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
         .calc-helper {
             background: #f1f5f9;
             border: 1px dashed #94a3b8;
@@ -336,13 +320,24 @@
         .summary-title { font-size: 0.9rem; font-weight: bold; color: var(--primary); margin-bottom: 6px; }
         .summary-list { font-size: 0.82rem; color: #1e293b; line-height: 1.5; }
 
-        /* 新增品項展開區塊 */
-        .add-item-box {
-            background: #f8fafc;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 14px;
+        /* 彈出視窗 (Modal) 樣式 */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 16px;
+        }
+        .modal-content {
+            background: #fff;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 420px;
+            padding: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
     </style>
 </head>
@@ -376,10 +371,7 @@
 
         <div class="form-group">
             <label>領料人員姓名</label>
-            <div style="display: flex; gap: 6px;">
-                <input type="text" id="takeUser" placeholder="請輸入姓名（例如：阿傑）">
-                <button type="button" class="btn-nfc" onclick="scanNfc('takeUser')" title="手機靠近晶片感應">📱 逼晶片</button>
-            </div>
+            <input type="text" id="takeUser" placeholder="請輸入姓名（例如：阿傑）">
         </div>
 
         <div class="form-group">
@@ -469,10 +461,7 @@
 
         <div class="form-group">
             <label>進貨經手人</label>
-            <div style="display: flex; gap: 6px;">
-                <input type="text" id="inUser" placeholder="請輸入經手人姓名">
-                <button type="button" class="btn-nfc" onclick="scanNfc('inUser')">📱 逼晶片</button>
-            </div>
+            <input type="text" id="inUser" placeholder="請輸入經手人姓名">
         </div>
 
         <div class="form-group">
@@ -480,35 +469,12 @@
             <input type="text" id="inNote" placeholder="例如：新進叫料 / 廠商送達">
         </div>
 
-        <!-- 新增自訂物品面板 -->
-        <div class="add-item-box">
-            <div style="font-weight: bold; font-size: 0.9rem; color: #1e293b; margin-bottom: 8px;">➕ 新增自訂五金品項</div>
-            <div class="form-group">
-                <label>所屬分類名稱</label>
-                <input type="text" id="newCatName" placeholder="例如：9. 特殊配件 / 1. 鋼索">
-            </div>
-            <div class="form-group">
-                <label>五金名稱</label>
-                <input type="text" id="newItemName" placeholder="例如：304強化加厚鉸鏈">
-            </div>
-            <div class="form-group">
-                <label>規格 / 孔距備註 (選填)</label>
-                <input type="text" id="newItemNote" placeholder="例如：厚度3.0mm / 孔距120">
-            </div>
-            <div class="calc-grid-2">
-                <div class="form-group" style="margin-bottom:0;">
-                    <label>初始庫存量</label>
-                    <input type="number" id="newItemQty" value="20" min="0">
-                </div>
-                <div class="form-group" style="margin-bottom:0;">
-                    <label>警示水位值</label>
-                    <input type="number" id="newItemSafe" value="10" min="0">
-                </div>
-            </div>
-            <button class="btn-outline" style="width: 100%; height: 40px; margin-top: 10px; font-weight: bold; background: #fff;" onclick="addNewHardwareItem()">＋ 確認新增品項至雲端</button>
+        <!-- 進貨數量標題列與新增按鈕 -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; margin-bottom: 6px;">
+            <label style="margin: 0;">各五金進貨數量：</label>
+            <button class="btn-outline" style="background: var(--primary); color: #fff; border: none; font-weight: bold; padding: 6px 10px;" onclick="openAddItemModal()">➕ 新增五金品項</button>
         </div>
-
-        <label style="margin-top: 6px;">各五金進貨數量（直接在項目填寫進貨量）：</label>
+        
         <div id="stockInListContainer"></div>
 
         <button class="btn-submit btn-in-submit" onclick="submitBatchStockIn()">確認整批進料（一次增加庫存）</button>
@@ -552,6 +518,44 @@
                 </thead>
                 <tbody id="logList"></tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- 新增自訂物品彈出視窗 (Modal) -->
+    <div id="addItemModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span style="font-weight: bold; font-size: 1rem; color: #1e293b;">➕ 新增自訂五金品項</span>
+                <button style="background: transparent; border: none; font-size: 1.2rem; cursor: pointer; color: #94a3b8;" onclick="closeAddItemModal()">✕</button>
+            </div>
+            
+            <div class="form-group">
+                <label>所屬分類名稱</label>
+                <input type="text" id="newCatName" placeholder="例如：9. 特殊配件 / 1. 鋼索">
+            </div>
+            <div class="form-group">
+                <label>五金名稱</label>
+                <input type="text" id="newItemName" placeholder="例如：304強化加厚鉸鏈">
+            </div>
+            <div class="form-group">
+                <label>規格 / 孔距備註 (選填)</label>
+                <input type="text" id="newItemNote" placeholder="例如：厚度3.0mm / 孔距120">
+            </div>
+            <div class="calc-grid-2">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>初始庫存量</label>
+                    <input type="number" id="newItemQty" value="20" min="0">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>警示水位值</label>
+                    <input type="number" id="newItemSafe" value="10" min="0">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px;">
+                <button class="btn-outline" style="height: 42px; border-color: #cbd5e1; color: #475569;" onclick="closeAddItemModal()">取消</button>
+                <button class="btn-submit" style="height: 42px; margin: 0; font-size: 0.95rem;" onclick="addNewHardwareItem()">確認新增</button>
+            </div>
         </div>
     </div>
 
@@ -611,50 +615,10 @@
         document.getElementById('takeDate').value = todayStr;
         document.getElementById('inDate').value = todayStr;
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const userParam = urlParams.get('user') || urlParams.get('name');
-        if (userParam) {
-            document.getElementById('takeUser').value = decodeURIComponent(userParam);
-            document.getElementById('inUser').value = decodeURIComponent(userParam);
-            localStorage.setItem('LAST_STOCK_USER', decodeURIComponent(userParam));
-        } else {
-            const cachedUser = localStorage.getItem('LAST_STOCK_USER');
-            if (cachedUser) {
-                document.getElementById('takeUser').value = cachedUser;
-                document.getElementById('inUser').value = cachedUser;
-            }
-        }
-
-        async function scanNfc(targetInputId) {
-            if ('NDEFReader' in window) {
-                try {
-                    const ndef = new NDEFReader();
-                    await ndef.scan();
-                    alert('📡 請將手機背面靠近 NFC 晶片貼片...');
-                    
-                    ndef.onreading = event => {
-                        const decoder = new TextDecoder();
-                        for (const record of event.message.records) {
-                            let text = decoder.decode(record.data);
-                            if (text.includes('user=')) {
-                                const match = text.match(/user=([^&]+)/);
-                                if (match) text = decodeURIComponent(match[1]);
-                            }
-                            text = text.trim();
-                            if (text) {
-                                document.getElementById(targetInputId).value = text;
-                                localStorage.setItem('LAST_STOCK_USER', text);
-                                alert(`✅ 晶片感應成功！人員：${text}`);
-                                break;
-                            }
-                        }
-                    };
-                } catch (error) {
-                    alert('NFC 讀取失敗或權限未開啟：' + error.message);
-                }
-            } else {
-                alert('提示：此手機瀏覽器未直接支援 Web NFC 按鈕，請直接使用手機靠近燒錄好專屬網址的 NFC 貼片感應開啟！');
-            }
+        const cachedUser = localStorage.getItem('LAST_STOCK_USER');
+        if (cachedUser) {
+            document.getElementById('takeUser').value = cachedUser;
+            document.getElementById('inUser').value = cachedUser;
         }
 
         db.ref('.info/connected').on('value', snap => {
@@ -696,7 +660,14 @@
             logsRef.set(logs.slice(0, 100));
         }
 
-        // 新增自訂五金零件
+        function openAddItemModal() {
+            document.getElementById('addItemModal').style.display = 'flex';
+        }
+
+        function closeAddItemModal() {
+            document.getElementById('addItemModal').style.display = 'none';
+        }
+
         function addNewHardwareItem() {
             const cat = document.getElementById('newCatName').value.trim() || '9. 其他自訂配件';
             const name = document.getElementById('newItemName').value.trim();
@@ -726,10 +697,10 @@
             document.getElementById('newItemQty').value = '20';
             document.getElementById('newItemSafe').value = '10';
 
+            closeAddItemModal();
             alert(`🎉 成功新增品項【${name}】！`);
         }
 
-        // 刪除自訂五金零件
         function deleteHardwareItem(id) {
             const item = items.find(i => i.id === id);
             if (!item) return;
