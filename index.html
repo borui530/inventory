@@ -113,6 +113,15 @@
         }
         input:focus, select:focus { border-color: var(--primary); }
 
+        /* 領料基本資料前置區塊醒目樣式 */
+        .setup-header-box {
+            background: #eff6ff;
+            border: 2px solid #bfdbfe;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 14px;
+        }
+
         .calc-helper {
             background: #f1f5f9;
             border: 1px dashed #94a3b8;
@@ -320,7 +329,6 @@
         .summary-title { font-size: 0.9rem; font-weight: bold; color: var(--primary); margin-bottom: 6px; }
         .summary-list { font-size: 0.82rem; color: #1e293b; line-height: 1.5; }
 
-        /* 彈出視窗 (Modal) 樣式 */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -362,21 +370,27 @@
 
     <!-- 區塊 A：領料出庫登記區 -->
     <div class="card" id="outSection">
-        <div class="card-title">📝 整單領料與配料試算</div>
+        <div class="card-title">📝 領料登記與配料試算</div>
 
-        <div class="form-group">
-            <label>領取日期</label>
-            <input type="date" id="takeDate">
-        </div>
+        <!-- 必填：日期、人員、用途 -->
+        <div class="setup-header-box">
+            <div style="font-size: 0.88rem; font-weight: bold; color: #1e40af; margin-bottom: 8px;">📌 請先完整填寫本次領料資訊（必填）：</div>
+            
+            <div class="calc-grid-2" style="margin-bottom: 8px;">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>領取日期 <span style="color:var(--danger)">*</span></label>
+                    <input type="date" id="takeDate">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>領料人員姓名 <span style="color:var(--danger)">*</span></label>
+                    <input type="text" id="takeUser" placeholder="例如：阿傑">
+                </div>
+            </div>
 
-        <div class="form-group">
-            <label>領料人員姓名</label>
-            <input type="text" id="takeUser" placeholder="請輸入姓名（例如：阿傑）">
-        </div>
-
-        <div class="form-group">
-            <label>用途 / 案名備註</label>
-            <input type="text" id="takePurpose" placeholder="例如：安南區張公館 / 新裝">
+            <div class="form-group" style="margin-bottom:0;">
+                <label>用途 / 案名備註 <span style="color:var(--danger)">*</span></label>
+                <input type="text" id="takePurpose" placeholder="例如：安南區張公館 / 新裝">
+            </div>
         </div>
 
         <!-- 現場規格分析計算 -->
@@ -394,14 +408,14 @@
                 </div>
                 <div class="form-group" style="margin-bottom:0;">
                     <label>門板片數 (N)</label>
-                    <input type="number" id="doorPanels" value="5" min="2" oninput="onPanelsChange()">
+                    <input type="number" id="doorPanels" value="5" min="2" inputmode="numeric" oninput="onPanelsChange()">
                 </div>
             </div>
 
             <div class="calc-grid-2">
                 <div class="form-group" style="margin-bottom:0;">
                     <label>門片開口高 (mm)</label>
-                    <input type="number" id="doorHeightMm" value="2700" placeholder="例如: 2500" oninput="onHeightMmChange()">
+                    <input type="number" id="doorHeightMm" value="2700" placeholder="例如: 2500" inputmode="numeric" oninput="onHeightMmChange()">
                 </div>
                 <div class="form-group" style="margin-bottom:0;">
                     <label>換算鋼索高度 (呎)</label>
@@ -419,11 +433,11 @@
             <div class="calc-grid-2">
                 <div class="form-group" style="margin-bottom:0;">
                     <label>門片總寬度 (mm)</label>
-                    <input type="number" id="doorWidthMm" value="5000" placeholder="例如: 5000" oninput="renderCart()">
+                    <input type="number" id="doorWidthMm" value="5000" placeholder="例如: 5000" inputmode="numeric" oninput="renderCart()">
                 </div>
                 <div class="form-group" style="margin-bottom:0;">
                     <label>彈簧條數</label>
-                    <input type="number" id="springCount" value="4" min="1" oninput="renderCart()">
+                    <input type="number" id="springCount" value="4" min="1" inputmode="numeric" oninput="renderCart()">
                 </div>
             </div>
 
@@ -469,7 +483,6 @@
             <input type="text" id="inNote" placeholder="例如：新進叫料 / 廠商送達">
         </div>
 
-        <!-- 進貨數量標題列與新增按鈕 -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; margin-bottom: 6px;">
             <label style="margin: 0;">各五金進貨數量：</label>
             <button class="btn-outline" style="background: var(--primary); color: #fff; border: none; font-weight: bold; padding: 6px 10px;" onclick="openAddItemModal()">➕ 新增五金品項</button>
@@ -502,7 +515,10 @@
         </div>
 
         <div id="projectSummaryBox" class="summary-modal">
-            <div class="summary-title" id="summaryTitle">📊 案名用料彙整統計</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <div class="summary-title" id="summaryTitle" style="margin:0;">📊 案名用料彙整統計</div>
+                <button class="btn-outline" style="font-size: 0.75rem; padding: 2px 6px;" onclick="copySummaryToClipboard()">📋 複製用料明細</button>
+            </div>
             <div class="summary-list" id="summaryContent"></div>
         </div>
 
@@ -544,11 +560,11 @@
             <div class="calc-grid-2">
                 <div class="form-group" style="margin-bottom:0;">
                     <label>初始庫存量</label>
-                    <input type="number" id="newItemQty" value="20" min="0">
+                    <input type="number" id="newItemQty" value="20" min="0" inputmode="numeric">
                 </div>
                 <div class="form-group" style="margin-bottom:0;">
                     <label>警示水位值</label>
-                    <input type="number" id="newItemSafe" value="10" min="0">
+                    <input type="number" id="newItemSafe" value="10" min="0" inputmode="numeric">
                 </div>
             </div>
 
@@ -560,7 +576,6 @@
     </div>
 
     <script>
-        // Firebase 設定
         const firebaseConfig = {
             apiKey: "AIzaSyDGl93s6TM9CaUAAd2yiFwaUnGlCyMxXbw",
             authDomain: "inventory-b4e2a.firebaseapp.com",
@@ -660,13 +675,8 @@
             logsRef.set(logs.slice(0, 100));
         }
 
-        function openAddItemModal() {
-            document.getElementById('addItemModal').style.display = 'flex';
-        }
-
-        function closeAddItemModal() {
-            document.getElementById('addItemModal').style.display = 'none';
-        }
+        function openAddItemModal() { document.getElementById('addItemModal').style.display = 'flex'; }
+        function closeAddItemModal() { document.getElementById('addItemModal').style.display = 'none'; }
 
         function addNewHardwareItem() {
             const cat = document.getElementById('newCatName').value.trim() || '9. 其他自訂配件';
@@ -675,20 +685,9 @@
             const qty = Number(document.getElementById('newItemQty').value) || 0;
             const safe = Number(document.getElementById('newItemSafe').value) || 10;
 
-            if (!name) {
-                alert('請輸入五金名稱！');
-                return;
-            }
+            if (!name) { alert('請輸入五金名稱！'); return; }
 
-            const newItem = {
-                id: Date.now(),
-                cat,
-                name,
-                note,
-                qty,
-                safe
-            };
-
+            const newItem = { id: Date.now(), cat, name, note, qty, safe };
             items.push(newItem);
             saveToCloud();
 
@@ -704,7 +703,6 @@
         function deleteHardwareItem(id) {
             const item = items.find(i => i.id === id);
             if (!item) return;
-
             if (confirm(`確定要自雲端刪除【${item.name}】嗎？此動作無法復原！`)) {
                 items = items.filter(i => i.id !== id);
                 saveToCloud();
@@ -914,7 +912,7 @@
                         </div>
                         <div class="cart-stepper">
                             <button class="cart-btn-step" onclick="updateCartQty(${index}, -1)">−</button>
-                            <input type="number" class="cart-input-qty" value="${cItem.qty}" min="1" onchange="setCartInputQty(${index}, this.value)">
+                            <input type="number" class="cart-input-qty" value="${cItem.qty}" min="1" inputmode="numeric" onchange="setCartInputQty(${index}, this.value)">
                             <button class="cart-btn-step" onclick="updateCartQty(${index}, 1)">＋</button>
                         </div>
                         <button class="cart-del-btn" onclick="removeCartItem(${index})">✕</button>
@@ -939,13 +937,30 @@
         function removeCartItem(index) { cart.splice(index, 1); renderCart(); }
 
         function submitBatchTake() {
-            if (cart.length === 0) { alert('待領料清單是空的！'); return; }
-
             const date = document.getElementById('takeDate').value;
-            const user = document.getElementById('takeUser').value.trim() || '現場人員';
-            const purpose = document.getElementById('takePurpose').value.trim() || '現場裝配';
+            const user = document.getElementById('takeUser').value.trim();
+            const purpose = document.getElementById('takePurpose').value.trim();
 
-            if (!date) { alert('請選擇領取日期'); return; }
+            // 嚴格檢核必填欄位，沒填直接擋下
+            if (!date) {
+                alert('❌ 請選擇【領取日期】！');
+                document.getElementById('takeDate').focus();
+                return;
+            }
+            if (!user) {
+                alert('❌ 請填寫【領料人員姓名】！');
+                document.getElementById('takeUser').focus();
+                return;
+            }
+            if (!purpose) {
+                alert('❌ 請填寫【用途 / 案名備註】（例如：安南區張公館）！');
+                document.getElementById('takePurpose').focus();
+                return;
+            }
+            if (cart.length === 0) {
+                alert('❌ 待領料清單是空的！請先加入零件。');
+                return;
+            }
 
             localStorage.setItem('LAST_STOCK_USER', user);
 
@@ -982,7 +997,7 @@
             cart = [];
             document.getElementById('takePurpose').value = '';
             saveToCloud();
-            alert(`🎉 整單領料成功！領料人：${user}，已扣除雲端庫存。`);
+            alert(`🎉 領料成功！領料人：${user}，案名：${purpose}，已扣除雲端庫存。`);
         }
 
         function renderStockInList() {
@@ -1012,7 +1027,7 @@
                         <button class="btn-quick-add" onclick="quickAddInQty(${item.id}, 20)">+20</button>
                         <div class="cart-stepper">
                             <button class="cart-btn-step" onclick="changeInQty(${item.id}, -1)">−</button>
-                            <input type="number" class="cart-input-qty" id="in_input_${item.id}" value="${currentVal}" min="0" onchange="setInQty(${item.id}, this.value)">
+                            <input type="number" class="cart-input-qty" id="in_input_${item.id}" value="${currentVal}" min="0" inputmode="numeric" onchange="setInQty(${item.id}, this.value)">
                             <button class="cart-btn-step" onclick="changeInQty(${item.id}, 1)">＋</button>
                         </div>
                     </div>
@@ -1203,6 +1218,8 @@
             });
         }
 
+        let lastCalculatedSummaryText = '';
+
         function calculateProjectSummary() {
             const keyword = (document.getElementById('searchKeyword').value || '').trim();
             const summaryBox = document.getElementById('projectSummaryBox');
@@ -1240,15 +1257,27 @@
                 });
             });
 
-            titleEl.innerHTML = `📊 【${keyword}】歷次領料加總彙整 (共 ${matchedLogs.length} 筆領料單)`;
+            titleEl.innerHTML = `📊 【${keyword}】歷次領料加總彙整`;
             let listHtml = '<ul style="margin:6px 0; padding-left:20px;">';
+            let textOutput = `【${keyword}】用料統計：\n`;
             for (let [name, qty] of Object.entries(totalMap)) {
                 listHtml += `<li><strong>${name}</strong>：共領用 <strong>${qty}</strong></li>`;
+                textOutput += `• ${name}：${qty}\n`;
             }
             listHtml += '</ul>';
 
+            lastCalculatedSummaryText = textOutput;
             contentEl.innerHTML = listHtml;
             summaryBox.style.display = 'block';
+        }
+
+        function copySummaryToClipboard() {
+            if (!lastCalculatedSummaryText) return;
+            navigator.clipboard.writeText(lastCalculatedSummaryText).then(() => {
+                alert('📋 已成功將用料統計複製到剪貼簿，可直接貼上至 LINE！');
+            }).catch(err => {
+                alert('複製失敗，請手動複製');
+            });
         }
 
         function clearLogsWithPassword() {
